@@ -1,30 +1,30 @@
 
 # ===========================================================================
-# Users (CHANGE the names to the real students)
+# IAM Users (Team Members)
 # ===========================================================================
 
 resource "aws_iam_user" "network" {
-  name          = "student-network"
-  force_destroy = true # also removes the student's console password and access keys
+  name          = "mohamed-ayad"
+  force_destroy = true
 }
 
 resource "aws_iam_user" "compute" {
-  name          = "student-compute"
+  name          = "moaaz-ehab"
   force_destroy = true
 }
 
 resource "aws_iam_user" "data" {
-  name          = "student-data"
+  name          = "kareem-hamdi"
   force_destroy = true
 }
 
 resource "aws_iam_user" "security" {
-  name          = "student-security"
+  name          = "haitham-mohamed"
   force_destroy = true
 }
 
 # ===========================================================================
-# Password rules for the console passwords the leader sets manually
+# Account Password Policy
 # ===========================================================================
 
 resource "aws_iam_account_password_policy" "this" {
@@ -38,11 +38,12 @@ resource "aws_iam_account_password_policy" "this" {
 }
 
 # ===========================================================================
-# User -> policies
+# User Policy Attachments
 # ===========================================================================
 
 resource "aws_iam_user_policy_attachments_exclusive" "network" {
   user_name = aws_iam_user.network.name
+
   policy_arns = [
     aws_iam_policy.base.arn,
     aws_iam_policy.self_service.arn,
@@ -51,6 +52,7 @@ resource "aws_iam_user_policy_attachments_exclusive" "network" {
 
 resource "aws_iam_user_policy_attachments_exclusive" "compute" {
   user_name = aws_iam_user.compute.name
+
   policy_arns = [
     aws_iam_policy.base.arn,
     aws_iam_policy.self_service.arn,
@@ -59,6 +61,7 @@ resource "aws_iam_user_policy_attachments_exclusive" "compute" {
 
 resource "aws_iam_user_policy_attachments_exclusive" "data" {
   user_name = aws_iam_user.data.name
+
   policy_arns = [
     aws_iam_policy.base.arn,
     aws_iam_policy.self_service.arn,
@@ -67,6 +70,7 @@ resource "aws_iam_user_policy_attachments_exclusive" "data" {
 
 resource "aws_iam_user_policy_attachments_exclusive" "security" {
   user_name = aws_iam_user.security.name
+
   policy_arns = [
     aws_iam_policy.base.arn,
     aws_iam_policy.self_service.arn,
@@ -74,43 +78,53 @@ resource "aws_iam_user_policy_attachments_exclusive" "security" {
 }
 
 # ===========================================================================
-# Shared policy: read-only on the shared state + read-only on project services
+# Shared Base Policy
+# Students can read project state and run Terraform plan.
+# Only the team leader should run Terraform apply.
 # ===========================================================================
 
 resource "aws_iam_policy" "base" {
-  name = "depi-team-n-base"
+  name = "secure-aws-infra-base"
   path = "/team-admin/"
 
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
         Sid      = "StateList"
         Effect   = "Allow"
         Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.terraform_state.arn
+
         Condition = {
-          StringLike = { "s3:prefix" = "project/*" }
+          StringLike = {
+            "s3:prefix" = "project/*"
+          }
         }
       },
       {
-        # Read the state only: students run `plan`, only the leader runs `apply`
         Sid      = "StateRead"
         Effect   = "Allow"
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.terraform_state.arn}/project/terraform.tfstate"
       },
       {
-        # `plan` takes the state lock, so the lock file must be writable
-        Sid      = "StateLock"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Sid    = "StateLock"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+
         Resource = "${aws_s3_bucket.terraform_state.arn}/project/terraform.tfstate.tflock"
       },
       {
-        # Needed so every student can run `terraform plan` (refresh) on the whole state
         Sid    = "ProjectReadOnly"
         Effect = "Allow"
+
         Action = [
           "ec2:Describe*",
           "ec2:Get*",
@@ -141,20 +155,26 @@ resource "aws_iam_policy" "base" {
           "secretsmanager:ListSecretVersionIds",
           "s3:ListAllMyBuckets",
           "s3:GetBucketLocation",
-          "tag:GetResources",
+          "tag:GetResources"
         ]
+
         Resource = "*"
       },
       {
-        # Bucket-level reads only (object ARNs are not listed, so no s3:GetObject here)
-        Sid      = "ProjectBucketConfigRead"
-        Effect   = "Allow"
-        Action   = ["s3:Get*", "s3:ListBucket"]
-        Resource = "arn:aws:s3:::depi-team-n-*"
+        Sid    = "ProjectBucketConfigRead"
+        Effect = "Allow"
+
+        Action = [
+          "s3:Get*",
+          "s3:ListBucket"
+        ]
+
+        Resource = "arn:aws:s3:::secure-aws-infra-*"
       },
       {
         Sid    = "ProjectIamRead"
         Effect = "Allow"
+
         Action = [
           "iam:GetRole",
           "iam:GetRolePolicy",
@@ -167,36 +187,44 @@ resource "aws_iam_policy" "base" {
           "iam:GetPolicy",
           "iam:GetPolicyVersion",
           "iam:ListPolicyVersions",
-          "iam:ListPolicyTags",
+          "iam:ListPolicyTags"
         ]
+
         Resource = [
-          "arn:aws:iam::*:role/depi-team-n-*",
-          "arn:aws:iam::*:policy/depi-team-n-*",
-          "arn:aws:iam::*:instance-profile/depi-team-n-*",
+          "arn:aws:iam::*:role/secure-aws-infra-*",
+          "arn:aws:iam::*:policy/secure-aws-infra-*",
+          "arn:aws:iam::*:instance-profile/secure-aws-infra-*",
           "arn:aws:iam::*:role/aws-service-role/*",
-          "arn:aws:iam::aws:policy/*",
+          "arn:aws:iam::aws:policy/*"
         ]
       },
       {
-        Sid      = "PublicAmiParameters"
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter", "ssm:GetParameters"]
+        Sid    = "PublicAmiParameters"
+        Effect = "Allow"
+
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+
         Resource = "arn:aws:ssm:us-east-1::parameter/aws/service/*"
-      },
+      }
     ]
   })
 }
 
 # ===========================================================================
-# Shared policy: let each user change their own password and manage their own keys
+# Self-Service Policy
+# Each student can change their own password and manage their own keys.
 # ===========================================================================
 
 resource "aws_iam_policy" "self_service" {
-  name = "depi-team-n-self-service"
+  name = "secure-aws-infra-self-service"
   path = "/team-admin/"
 
   policy = jsonencode({
     Version = "2012-10-17"
+
     Statement = [
       {
         Sid      = "ViewPasswordPolicy"
@@ -207,6 +235,7 @@ resource "aws_iam_policy" "self_service" {
       {
         Sid    = "ManageOwnPasswordAndKeys"
         Effect = "Allow"
+
         Action = [
           "iam:ChangePassword",
           "iam:GetUser",
@@ -214,10 +243,11 @@ resource "aws_iam_policy" "self_service" {
           "iam:DeleteAccessKey",
           "iam:ListAccessKeys",
           "iam:UpdateAccessKey",
-          "iam:GetAccessKeyLastUsed",
+          "iam:GetAccessKeyLastUsed"
         ]
+
         Resource = "arn:aws:iam::*:user/$${aws:username}"
-      },
+      }
     ]
   })
 }
