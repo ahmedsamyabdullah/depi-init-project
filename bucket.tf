@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "depi-team-n-tfstate"
+  bucket = "secure-aws-infra-097908022344-tfstate"
 
   lifecycle {
     prevent_destroy = true
