@@ -3,7 +3,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project   = "depi-team-n"
+      Project   = "secure-aws-infrastructure"
       ManagedBy = "terraform"
       Stack     = "init"
     }
